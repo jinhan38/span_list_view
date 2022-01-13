@@ -18,18 +18,18 @@ class SpanListView extends StatefulWidget {
     this.pinnedFooter,
     this.scrollHeader,
     this.scrollFooter,
+    this.pinnedScrollFooter = false,
     this.shrinkWrap = true,
     this.primary = false,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = const EdgeInsets.all(0),
     this.lineVerticalAxisAlignment = CrossAxisAlignment.center,
     this.mainAxisAlignment = MainAxisAlignment.spaceEvenly,
     this.lineItemExpanded = true,
     Key? key,
-  })
-      : assert((span > 0 && span < 11),
-  'span must be less than 11 and higher than 0. Current span is $span.'),
+  })  : assert((span > 0 && span < 11),
+            'span must be less than 11 and higher than 0. Current span is $span.'),
         assert((fetchDataPercent < 1.0 && fetchDataPercent > 0),
-        'etchDataPercent must be less than 1.0 and higher than 0. Current fetchDataPercent is $fetchDataPercent'),
+            'etchDataPercent must be less than 1.0 and higher than 0. Current fetchDataPercent is $fetchDataPercent'),
         super(key: key);
 
   ///If [initStateFunction] is not null, it will be called in the initState.
@@ -76,6 +76,10 @@ class SpanListView extends StatefulWidget {
   ///Visible when the scroll reaches the bottom
   final Widget? scrollFooter;
 
+  ///If it is false, it will be shown when you call [fetchData] function.
+  ///It it is true, it will be always shown.
+  final bool pinnedScrollFooter;
+
   ///[pinnedHeader] is header of ListView.
   ///It is pinned at the top regardless of the scrolling of ListView
   final Widget? pinnedHeader;
@@ -119,7 +123,9 @@ class SpanListView extends StatefulWidget {
 }
 
 class _SpanListViewState extends State<SpanListView> {
-
+  ///If you are adding data, [fetchingData] will be true and [widget.scrollFooter] will be shown.
+  ///If you are not adding data, [fetchingData] will be false and [widget.scrollFooter] will be hidden.
+  bool fetchingData = false;
 
   @override
   void initState() {
@@ -131,26 +137,31 @@ class _SpanListViewState extends State<SpanListView> {
 
   @override
   Widget build(BuildContext context) {
-    /// When pinnedHeader or pinnedFooter is not null,
-    /// after wrapping ListView with Column, put pinnedHeader and pinnedFooter at the top and bottom of ListView.
-    /// If pinnedHeader and pinnedFooter are both null, return ListView directly.
-    if (widget.pinnedHeader != null || widget.pinnedFooter != null) {
-      return Column(
-        children: [
-          if (widget.pinnedHeader != null) ...[widget.pinnedHeader!],
-          Expanded(child: _listViewWidget()),
-          if (widget.pinnedFooter != null) ...[widget.pinnedFooter!],
-        ],
-      );
+    /// If pinnedHeader and pinnedFooter are both null, return only ListView.
+    /// If pinnedHeader or pinnedFooter is not null,
+    /// put pinnedHeader and pinnedFooter at the top and bottom of ListView, after wrapping ListView with Column.
+
+    if (widget.itemCount == 0) {
+      return const SizedBox();
     } else {
-      return _listViewWidget();
+      if (widget.pinnedHeader == null || widget.pinnedFooter == null) {
+        return _listViewWidget();
+      } else {
+        return Column(
+          children: [
+            if (widget.pinnedHeader != null) ...[widget.pinnedHeader!],
+            Expanded(child: _listViewWidget()),
+            if (widget.pinnedFooter != null) ...[widget.pinnedFooter!],
+          ],
+        );
+      }
     }
   }
 
   ///ListView Widget
   Widget _listViewWidget() {
     int _itemCount =
-    _calcItemCount(itemCount: widget.itemCount, span: widget.span);
+        _calcItemCount(itemCount: widget.itemCount, span: widget.span);
     return ListView.separated(
       itemCount: _itemCount,
       padding: widget.padding,
@@ -179,17 +190,13 @@ class _SpanListViewState extends State<SpanListView> {
             mainAxisAlignment: widget.mainAxisAlignment);
 
         if (index == 0) {
-          if (widget.scrollHeader == null) {
-            return listItemLine;
-          } else {
-            return _listItemLineWithHeader(widget.scrollHeader!, listItemLine);
-          }
+          return scrollHeaderWidget(
+              listItemLine: listItemLine, scrollHeader: widget.scrollHeader);
         } else if (index == _itemCount - 1) {
-          if (widget.scrollFooter == null) {
-            return listItemLine;
-          } else {
-            return _listItemLineWithFooter(widget.scrollFooter!, listItemLine);
-          }
+          return scrollFooterWidget(
+              listItemLine: listItemLine,
+              scrollFooter: widget.scrollFooter,
+              fetchingData: fetchingData);
         } else {
           return listItemLine;
         }
@@ -200,7 +207,39 @@ class _SpanListViewState extends State<SpanListView> {
     );
   }
 
+  ///If [scrollHeader] is null, return only [listItemLine].
+  ///But [scrollHeader] not null, return [listItemLine] with scrollHeaderWidget.
+  Widget scrollHeaderWidget({
+    required Widget listItemLine,
+    required Widget? scrollHeader,
+  }) {
+    if (scrollHeader == null) {
+      return listItemLine;
+    } else {
+      return _listItemLineWithHeader(scrollHeader, listItemLine);
+    }
+  }
+
+  ///It can be shown, when you are fetching data.
+  ///If [scrollFooter] is null, return only [listItemLine].
+  ///If value of fetchingData is false, return only [listItemLine].
+  ///But [scrollFooter] not null, return [listItemLine] with scrollFooterWidget.
+  Widget scrollFooterWidget({
+    required Widget listItemLine,
+    required Widget? scrollFooter,
+    required bool fetchingData,
+  }) {
+    if (scrollFooter == null) {
+      return listItemLine;
+    } else if (!fetchingData && !widget.pinnedScrollFooter) {
+      return listItemLine;
+    } else {
+      return _listItemLineWithFooter(scrollFooter, listItemLine);
+    }
+  }
+
   ///[_calcItemCount] is a function that finds itemCount of ListView.
+  ///It is not the count of dataList
   ///If span is one, returns itemCount as is without calculation.
   ///But span is higher one, itemCount must be calculated considering span.
   int _calcItemCount({required int itemCount, required int span}) {
@@ -211,19 +250,19 @@ class _SpanListViewState extends State<SpanListView> {
     }
   }
 
-  ///데이터리스트의 몇번째 index인지 알아야 함
-  ///0이나 1인 경우에는 인덱스 그대로 반환
-  ///span이 1보다 큰 경우 현재 리스트의 index와 span을 이용해서
-  ///dataList의 index 값을 list에 담아서 반환
+  ///This function is used for getting the index of dataList.
+  ///If span one or zero, return currentIndex.
+  ///But If span is higher one, need more calculation
+  ///currentIndex is index of ListView. In other word, it is line index.
+  ///So, you can get the index of current dataList by multiplying [currentIndex] and [span].
+  ///With the index just obtained, run the for loop and store the index as much as span
   List<int> _calcDataListItemIndex(
       {required int currentIndex, required int span, required int itemCount}) {
     List<int> itemIndexList = [];
     if (span == 1) {
       itemIndexList.add(currentIndex);
     } else {
-      ///현재 몇번째 줄인지 체크
       int index = currentIndex * span;
-
       int count = 0;
       for (int i = 0; i < span; i++) {
         int tempIndex = index + count;
@@ -256,7 +295,7 @@ class _SpanListViewState extends State<SpanListView> {
 
   ///one line Widget
   ///you can set Alignment by using values of [lineVerticalAxisAlignment], [mainAxisAlignment], and [widget.lineItemExpanded].
-  ///If horizontalSeparatorWidget is not null, could put separatorWidget.
+  ///If [horizontalSeparatorWidget] is not null, could put [widget.separatorWidget].
   Widget _listItemLine({
     required IndexedWidgetBuilder widgetBuilder,
     required int span,
@@ -272,10 +311,9 @@ class _SpanListViewState extends State<SpanListView> {
         for (int i = 0; i < itemIndexList.length; i++) ...[
           if (widget.lineItemExpanded) ...[
             Expanded(child: widgetBuilder(itemIndexList[i])),
-          ] else
-            ...[
-              Flexible(flex: 1, child: widgetBuilder(itemIndexList[i])),
-            ],
+          ] else ...[
+            Flexible(flex: 1, child: widgetBuilder(itemIndexList[i])),
+          ],
           if (horizontalSeparatorWidget != null &&
               i < itemIndexList.length - 1) ...[horizontalSeparatorWidget],
         ],
@@ -293,15 +331,24 @@ class _SpanListViewState extends State<SpanListView> {
     required double fetchDataPercent,
     required Function? fetchData,
   }) async {
-    if (fetchData != null) {
-      if (usePercentFetchData) {
-        if (currentIndex == (itemCount * fetchDataPercent).floor()) {
-          await fetchData();
+    try {
+      if (fetchData != null) {
+        if (usePercentFetchData) {
+          if (currentIndex == (itemCount * fetchDataPercent).floor()) {
+            fetchingData = true;
+            await fetchData();
+            fetchingData = false;
+          }
+        } else {
+          if (currentIndex == itemCount - 1) {
+            fetchingData = true;
+            await fetchData();
+            fetchingData = false;
+          }
         }
-      } else {
-        if (currentIndex == itemCount - 1) await fetchData();
       }
+    } catch (e) {
+      print("_fetchData error : $e");
     }
   }
-
 }

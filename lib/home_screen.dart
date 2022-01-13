@@ -11,6 +11,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<String> dataList = [];
   int totalSize = 500;
+  int pageNum = 0;
+
+  SizedBox sb24 = const SizedBox(width: 24);
 
   bool loading = false;
 
@@ -28,48 +31,74 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              SizedBox(width: 24),
+              sb24,
               Expanded(
                 child: ElevatedButton(
                     onPressed: () async {
-                      dataList.clear();
-                      setState(() {});
+                      pageNum = 0;
+                      if (mounted) setState(() => dataList.clear());
                     },
                     child: const Text("초기화")),
               ),
-              SizedBox(width: 24),
+              sb24,
               Expanded(
-                child: ElevatedButton(
-                    onPressed: () async {
-                      await addData();
-                      setState(() {});
-                    },
-                    child: const Text("생성")),
-              ),
-              SizedBox(width: 24),
+                  child: ElevatedButton(
+                      onPressed: () async => await addData(),
+                      child: const Text("생성"))),
+              sb24,
             ],
           ),
           Expanded(
             child: SpanListView(
-              initStateFunction: () {
-                print("initStatedFunction");
-              },
+              pinnedScrollFooter: false,
+              initStateFunction: () {},
               lineVerticalAxisAlignment: CrossAxisAlignment.start,
               horizontalSeparatorWidget: const SizedBox(width: 12),
               separatorWidget: const SizedBox(height: 12),
               itemCount: dataList.length,
-              span: 10,
+              span: 4,
               fetchDataPercent: 0.9,
               lineItemExpanded: false,
               usePercentFetchData: true,
               scrollHeader: Container(
-                  width: double.infinity, height: 50, color: Colors.purple),
-              scrollFooter: Container(
-                  width: double.infinity, height: 50, color: Colors.pink),
-              pinnedHeader: const CircularProgressIndicator(color: Colors.red),
-              pinnedFooter: const CircularProgressIndicator(color: Colors.blue),
+                alignment: Alignment.center,
+                width: double.infinity,
+                color: Colors.deepPurpleAccent,
+                height: 45,
+                child: const Text(
+                  "스크롤 헤더",
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+              scrollFooter: const CircularProgressIndicator(color: Colors.blue),
+              pinnedHeader: Container(
+                alignment: Alignment.center,
+                width: double.infinity,
+                height: 50,
+                child: const Text(
+                  "고정 헤더",
+                  style: TextStyle(fontSize: 20),
+                ),
+                color: Colors.pinkAccent,
+              ),
+              pinnedFooter: Container(
+                alignment: Alignment.center,
+                width: double.infinity,
+                height: 50,
+                child: const Text(
+                  "고정 푸터",
+                  style: TextStyle(fontSize: 20),
+                ),
+                color: Colors.greenAccent,
+              ),
+              padding: EdgeInsets.all(12),
               widgetBuilder: (index) {
-                return item(dataList[index], index);
+                return GestureDetector(
+                  child: item(dataList[index], index),
+                  onTap: () {
+                    print("index : $index");
+                  },
+                );
               },
               fetchData: () async {
                 if (!loading && totalSize > dataList.length) {
@@ -83,39 +112,55 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  ///add data
   Future addData() async {
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
-      setState(() => loading = true);
-    });
-    await Future.delayed(const Duration(milliseconds: 200), () async {})
-        .then((value) {
-      List<String> tempList = [];
-      for (int i = 0; i < 100; i++) {
-        tempList.add("데이터 : ${dataList.length + i}");
-      }
-      dataList.addAll(tempList);
-
-      WidgetsBinding.instance!.addPostFrameCallback((_) {
+    try {
+      loading = true;
+      await Future.delayed(const Duration(milliseconds: 100)).then((value) {
+        for (int i = 0; i < 100; i++) {
+          int value = (pageNum * 100) + i;
+          if (value == 100) {
+            dataList.add("리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트리스트");
+          } else {
+            dataList.add(value.toString());
+          }
+        }
+        pageNum++;
         loading = false;
-        setState(() => loading = false);
+        setState(() {});
+      }).onError((error, stackTrace) {
+        loading = false;
       });
-    });
+    } catch (e) {
+      print("addData error : $e");
+    }
   }
 
   Widget item(String text, int index) {
     return Container(
       alignment: Alignment.center,
-      color: Colors.grey,
+      color: Colors.grey.shade300,
       width: 80,
       child: Column(
         children: [
-          Text(text),
-          if (index.isEven)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                  child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              )),
+            ],
+          ),
+          if (index.isEven) ...[
             Container(
-              width: 70,
+              width: 80,
               height: 29,
               color: Colors.blue,
-            )
+            ),
+          ]
         ],
       ),
     );
